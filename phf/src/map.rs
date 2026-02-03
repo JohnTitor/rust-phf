@@ -18,8 +18,21 @@ use serde::ser::{Serialize, SerializeMap, Serializer};
 pub struct Map<K: 'static, V: 'static> {
     #[doc(hidden)]
     pub key: HashKey,
+    #[cfg(not(feature = "ptrhash"))]
     #[doc(hidden)]
     pub disps: &'static [(u32, u32)],
+    #[cfg(feature = "ptrhash")]
+    #[doc(hidden)]
+    pub buckets: u32,
+    #[cfg(feature = "ptrhash")]
+    #[doc(hidden)]
+    pub slots: u32,
+    #[cfg(feature = "ptrhash")]
+    #[doc(hidden)]
+    pub pilots: &'static [u16],
+    #[cfg(feature = "ptrhash")]
+    #[doc(hidden)]
+    pub remap: &'static [u32],
     #[doc(hidden)]
     pub entries: &'static [(K, V)],
 }
@@ -58,7 +71,22 @@ where
     V: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.key == other.key && self.disps == other.disps && self.entries == other.entries
+        if self.key != other.key || self.entries != other.entries {
+            return false;
+        }
+
+        #[cfg(not(feature = "ptrhash"))]
+        {
+            return self.disps == other.disps;
+        }
+
+        #[cfg(feature = "ptrhash")]
+        {
+            self.buckets == other.buckets
+                && self.slots == other.slots
+                && self.pilots == other.pilots
+                && self.remap == other.remap
+        }
     }
 }
 
@@ -75,7 +103,16 @@ impl<K, V> Map<K, V> {
     pub const fn new() -> Self {
         Self {
             key: 0,
+            #[cfg(not(feature = "ptrhash"))]
             disps: &[],
+            #[cfg(feature = "ptrhash")]
+            buckets: 0,
+            #[cfg(feature = "ptrhash")]
+            slots: 0,
+            #[cfg(feature = "ptrhash")]
+            pilots: &[],
+            #[cfg(feature = "ptrhash")]
+            remap: &[],
             entries: &[],
         }
     }
@@ -128,11 +165,34 @@ impl<K, V> Map<K, V> {
         T: Eq + PhfHash + ?Sized,
         K: PhfBorrow<T>,
     {
+        #[cfg(not(feature = "ptrhash"))]
         if self.disps.is_empty() {
             return None;
-        } //Prevent panic on empty map
-        let hashes = phf_shared::hash(key, &self.key);
-        let index = phf_shared::get_index(&hashes, self.disps, self.entries.len());
+        }
+        #[cfg(feature = "ptrhash")]
+        if self.pilots.is_empty() {
+            return None;
+        }
+
+        #[cfg(not(feature = "ptrhash"))]
+        let index = {
+            let hashes = phf_shared::hash(key, &self.key);
+            phf_shared::get_index(&hashes, self.disps, self.entries.len())
+        };
+
+        #[cfg(feature = "ptrhash")]
+        let index = {
+            let hashes = phf_shared::ptrhash::hash(key, &self.key);
+            phf_shared::ptrhash::get_index(
+                &hashes,
+                &self.key,
+                self.buckets,
+                self.slots,
+                self.pilots,
+                self.remap,
+                self.entries.len(),
+            )
+        };
         let entry = &self.entries[index as usize];
         let b: &T = entry.0.borrow();
         if b == key {

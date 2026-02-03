@@ -8,6 +8,9 @@
 #[cfg(feature = "std")]
 extern crate std as core;
 
+#[cfg(feature = "ptrhash")]
+pub mod ptrhash;
+
 use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::num::Wrapping;

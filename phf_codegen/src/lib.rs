@@ -230,6 +230,7 @@ pub struct DisplayMap<'a, K> {
     values: &'a [Cow<'a, str>],
 }
 
+#[cfg(not(feature = "ptrhash"))]
 impl<'a, K: FmtConst + 'a> fmt::Display for DisplayMap<'a, K> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // funky formatting here for nice output
@@ -259,6 +260,71 @@ impl<'a, K: FmtConst + 'a> fmt::Display for DisplayMap<'a, K> {
         )?;
 
         // write map entries
+        for &idx in &self.state.map {
+            write!(
+                f,
+                "
+        ({}, {}),",
+                Delegate(&self.keys[idx]),
+                &self.values[idx]
+            )?;
+        }
+
+        write!(
+            f,
+            "
+    ],
+}}"
+        )
+    }
+}
+
+#[cfg(feature = "ptrhash")]
+impl<'a, K: FmtConst + 'a> fmt::Display for DisplayMap<'a, K> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // funky formatting here for nice output
+        write!(
+            f,
+            "{}::Map {{
+    key: {:?},
+    buckets: {},
+    slots: {},
+    pilots: &[",
+            self.path, self.state.key, self.state.buckets, self.state.slots
+        )?;
+
+        for pilot in &self.state.pilots {
+            write!(
+                f,
+                "
+        {},",
+                pilot
+            )?;
+        }
+
+        write!(
+            f,
+            "
+    ],
+    remap: &[",
+        )?;
+
+        for remap in &self.state.remap {
+            write!(
+                f,
+                "
+        {},",
+                remap
+            )?;
+        }
+
+        write!(
+            f,
+            "
+    ],
+    entries: &[",
+        )?;
+
         for &idx in &self.state.map {
             write!(
                 f,
@@ -405,6 +471,7 @@ pub struct DisplayOrderedMap<'a, K> {
     values: &'a [Cow<'a, str>],
 }
 
+#[cfg(not(feature = "ptrhash"))]
 impl<'a, K: FmtConst + 'a> fmt::Display for DisplayOrderedMap<'a, K> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -451,6 +518,86 @@ impl<'a, K: FmtConst + 'a> fmt::Display for DisplayOrderedMap<'a, K> {
                 value
             )?;
         }
+        write!(
+            f,
+            "
+    ],
+}}"
+        )
+    }
+}
+
+#[cfg(feature = "ptrhash")]
+impl<'a, K: FmtConst + 'a> fmt::Display for DisplayOrderedMap<'a, K> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}::OrderedMap {{
+    key: {:?},
+    buckets: {},
+    slots: {},
+    pilots: &[",
+            self.path, self.state.key, self.state.buckets, self.state.slots
+        )?;
+
+        for pilot in &self.state.pilots {
+            write!(
+                f,
+                "
+        {},",
+                pilot
+            )?;
+        }
+
+        write!(
+            f,
+            "
+    ],
+    remap: &[",
+        )?;
+
+        for remap in &self.state.remap {
+            write!(
+                f,
+                "
+        {},",
+                remap
+            )?;
+        }
+
+        write!(
+            f,
+            "
+    ],
+    idxs: &[",
+        )?;
+
+        for &idx in &self.state.map {
+            write!(
+                f,
+                "
+        {},",
+                idx
+            )?;
+        }
+
+        write!(
+            f,
+            "
+    ],
+    entries: &[",
+        )?;
+
+        for (key, value) in self.keys.iter().zip(self.values.iter()) {
+            write!(
+                f,
+                "
+        ({}, {}),",
+                Delegate(key),
+                value
+            )?;
+        }
+
         write!(
             f,
             "

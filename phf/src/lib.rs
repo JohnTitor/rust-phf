@@ -2,8 +2,9 @@
 //! [perfect hash functions](http://en.wikipedia.org/wiki/Perfect_hash_function).
 //!
 //! It currently uses the
-//! [CHD algorithm](http://cmph.sourceforge.net/papers/esa09.pdf) and can generate
-//! a 100,000 entry map in roughly .4 seconds.
+//! [CHD algorithm](http://cmph.sourceforge.net/papers/esa09.pdf) by default and can generate
+//! a 100,000 entry map in roughly .4 seconds. Enable the `ptrhash` feature to use the
+//! experimental PtrHash-style generator instead.
 //!
 //! MSRV (minimum supported rust version) is Rust 1.68.
 //!
@@ -32,6 +33,8 @@
 //! ## Example (with the `macros` feature enabled)
 //!
 //! ```rust
+//! # #[cfg(feature = "macros")]
+//! # {
 //! use phf::phf_map;
 //!
 //! #[derive(Clone)]
@@ -54,6 +57,7 @@
 //! pub fn parse_keyword(keyword: &str) -> Option<Keyword> {
 //!     KEYWORDS.get(keyword).cloned()
 //! }
+//! # }
 //! ```
 //!
 //! Alternatively, you can use the [`phf_codegen`] crate to generate PHF datatypes

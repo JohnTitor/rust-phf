@@ -19,8 +19,21 @@ use phf_shared::{self, HashKey, PhfBorrow, PhfHash};
 pub struct OrderedMap<K: 'static, V: 'static> {
     #[doc(hidden)]
     pub key: HashKey,
+    #[cfg(not(feature = "ptrhash"))]
     #[doc(hidden)]
     pub disps: &'static [(u32, u32)],
+    #[cfg(feature = "ptrhash")]
+    #[doc(hidden)]
+    pub buckets: u32,
+    #[cfg(feature = "ptrhash")]
+    #[doc(hidden)]
+    pub slots: u32,
+    #[cfg(feature = "ptrhash")]
+    #[doc(hidden)]
+    pub pilots: &'static [u16],
+    #[cfg(feature = "ptrhash")]
+    #[doc(hidden)]
+    pub remap: &'static [u32],
     #[doc(hidden)]
     pub idxs: &'static [usize],
     #[doc(hidden)]
@@ -55,10 +68,22 @@ where
     V: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.key == other.key
-            && self.disps == other.disps
-            && self.idxs == other.idxs
-            && self.entries == other.entries
+        if self.key != other.key || self.idxs != other.idxs || self.entries != other.entries {
+            return false;
+        }
+
+        #[cfg(not(feature = "ptrhash"))]
+        {
+            return self.disps == other.disps;
+        }
+
+        #[cfg(feature = "ptrhash")]
+        {
+            self.buckets == other.buckets
+                && self.slots == other.slots
+                && self.pilots == other.pilots
+                && self.remap == other.remap
+        }
     }
 }
 
@@ -142,11 +167,34 @@ impl<K, V> OrderedMap<K, V> {
         T: Eq + PhfHash + ?Sized,
         K: PhfBorrow<T>,
     {
+        #[cfg(not(feature = "ptrhash"))]
         if self.disps.is_empty() {
             return None;
-        } //Prevent panic on empty map
-        let hashes = phf_shared::hash(key, &self.key);
-        let idx_index = phf_shared::get_index(&hashes, self.disps, self.idxs.len());
+        }
+        #[cfg(feature = "ptrhash")]
+        if self.pilots.is_empty() {
+            return None;
+        }
+
+        #[cfg(not(feature = "ptrhash"))]
+        let idx_index = {
+            let hashes = phf_shared::hash(key, &self.key);
+            phf_shared::get_index(&hashes, self.disps, self.idxs.len())
+        };
+
+        #[cfg(feature = "ptrhash")]
+        let idx_index = {
+            let hashes = phf_shared::ptrhash::hash(key, &self.key);
+            phf_shared::ptrhash::get_index(
+                &hashes,
+                &self.key,
+                self.buckets,
+                self.slots,
+                self.pilots,
+                self.remap,
+                self.idxs.len(),
+            )
+        };
         let idx = self.idxs[idx_index as usize];
         let entry = &self.entries[idx];
 

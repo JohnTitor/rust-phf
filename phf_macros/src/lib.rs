@@ -421,6 +421,7 @@ fn check_duplicates(entries: &[Entry]) -> parse::Result<()> {
     Ok(())
 }
 
+#[cfg(not(feature = "ptrhash"))]
 fn build_map(entries: &[Entry], state: HashState) -> proc_macro2::TokenStream {
     let key = state.key;
     let disps = state.disps.iter().map(|&(d1, d2)| quote!((#d1, #d2)));
@@ -441,6 +442,34 @@ fn build_map(entries: &[Entry], state: HashState) -> proc_macro2::TokenStream {
     }
 }
 
+#[cfg(feature = "ptrhash")]
+fn build_map(entries: &[Entry], state: HashState) -> proc_macro2::TokenStream {
+    let key = state.key;
+    let buckets = state.buckets;
+    let slots = state.slots;
+    let pilots = state.pilots.iter().map(|pilot| quote!(#pilot));
+    let remap = state.remap.iter().map(|idx| quote!(#idx));
+    let entries = state.map.iter().map(|&idx| {
+        let entry = &entries[idx];
+        let key = &entry.key.expr[0]; // Use the first expression
+        let value = &entry.value;
+        // Don't include attributes since we've filtered at macro expansion time
+        quote!((#key, #value))
+    });
+
+    quote! {
+        phf::Map {
+            key: #key,
+            buckets: #buckets,
+            slots: #slots,
+            pilots: &[#(#pilots),*],
+            remap: &[#(#remap),*],
+            entries: &[#(#entries),*],
+        }
+    }
+}
+
+#[cfg(not(feature = "ptrhash"))]
 fn build_ordered_map(entries: &[Entry], state: HashState) -> proc_macro2::TokenStream {
     let key = state.key;
     let disps = state.disps.iter().map(|&(d1, d2)| quote!((#d1, #d2)));
@@ -456,6 +485,34 @@ fn build_ordered_map(entries: &[Entry], state: HashState) -> proc_macro2::TokenS
         phf::OrderedMap {
             key: #key,
             disps: &[#(#disps),*],
+            idxs: &[#(#idxs),*],
+            entries: &[#(#entries),*],
+        }
+    }
+}
+
+#[cfg(feature = "ptrhash")]
+fn build_ordered_map(entries: &[Entry], state: HashState) -> proc_macro2::TokenStream {
+    let key = state.key;
+    let buckets = state.buckets;
+    let slots = state.slots;
+    let pilots = state.pilots.iter().map(|pilot| quote!(#pilot));
+    let remap = state.remap.iter().map(|idx| quote!(#idx));
+    let idxs = state.map.iter().map(|idx| quote!(#idx));
+    let entries = entries.iter().map(|entry| {
+        let key = &entry.key.expr[0]; // Use the first expression
+        let value = &entry.value;
+        // Don't include attributes since we've filtered at macro expansion time
+        quote!((#key, #value))
+    });
+
+    quote! {
+        phf::OrderedMap {
+            key: #key,
+            buckets: #buckets,
+            slots: #slots,
+            pilots: &[#(#pilots),*],
+            remap: &[#(#remap),*],
             idxs: &[#(#idxs),*],
             entries: &[#(#entries),*],
         }

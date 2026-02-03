@@ -13,3 +13,6 @@ categories = ["data-structures"]
 [dependencies]
 phf_generator = "0.13.1"
 phf_shared = "0.13.1"
+
+[features]
+ptrhash = ["phf_generator/ptrhash", "phf_shared/ptrhash"]
